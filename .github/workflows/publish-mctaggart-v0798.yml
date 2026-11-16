@@ -22,7 +22,7 @@ jobs:
           cat publish/mctaggart-v0.7.98/McTaggart-Family-TV-v0.7.98-build171-PROJECTOR.apk.b64.part-* | base64 -d > dist/McTaggart-Family-TV-v0.7.98-build171-PROJECTOR.apk
           cp publish/mctaggart-v0.7.98/SHA256SUMS.txt dist/
           cd dist
-          sha256sum -c SHA256SUMS.txt
+          sed 's#^dist/##' SHA256SUMS.txt | sha256sum -c -
       - name: Publish public release
         env:
           GH_TOKEN: ${{ github.token }}
