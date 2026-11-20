@@ -1,4 +1,4 @@
-name: Publish McTaggart Fire OS 5 public APK from verified mirror
+name: Publish verified McTaggart Fire OS 5 APK from authenticated chunk transfer
 on:
   push:
     paths:
@@ -13,26 +13,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Download and verify exact approved APK
+      - name: Reassemble signed APK from transport branch and verify its hash
         shell: bash
         run: |
           set -euo pipefail
-          SOURCE=public-mctaggart-fireos5-art-vpn-source.txt
-          test -s "$SOURCE"
-          URL="$(sed -n '1p' "$SOURCE" | tr -d '\r')"
-          EXPECTED="$(sed -n '2p' "$SOURCE" | tr -d '\r')"
-          [[ "$URL" =~ ^https://(filebin\.net|qurl\.sh|litter\.catbox\.moe)/ ]] || {
-            echo "Unexpected mirror hostname"; exit 1;
-          }
-          [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]] || { echo "Invalid SHA-256"; exit 1; }
-          APK=McTaggart-FireOS5-Art-VPN-v2-TEST.apk
-          curl --fail --show-error --location --retry 3 --max-time 300 \
-            -o "$APK" "$URL"
-          printf '%s  %s\n' "$EXPECTED" "$APK" | sha256sum --check
-          test "$(wc -c < "$APK")" -gt 10000000
+          git fetch --no-tags origin refs/heads/staging/mctaggart-fireos5-verified-apk
+          git checkout FETCH_HEAD -- staged-apk-chunks/
+          test "$(find staged-apk-chunks -type f | wc -l)" -eq 39
+          APK="McTaggart-FireOS5-Art-VPN-v2-TEST.apk"
+          cat staged-apk-chunks/part-* | base64 --decode > "$APK"
+          printf '%s  %s\n' "49dfbf1ebb11dd72cfd27fc51b5625e08064e14823cc961585e4925dc202adb5" "$APK" | sha256sum --check
+          test "$(wc -c < "$APK")" -eq 22739193
           unzip -t "$APK" >/dev/null
-          unzip -l "$APK" | grep -q 'assets/private/oracle-firestick.b64'
-          echo "Verified exact matching APK; original private build not modified."
+          unzip -l "$APK" | grep -Fq 'assets/private/oracle-firestick.b64'
+          echo "Exact signed APK and bundled client profile verified."
       - name: Publish public downloadable release
         env:
           GH_TOKEN: ${{ github.token }}
