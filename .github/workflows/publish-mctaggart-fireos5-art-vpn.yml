@@ -1,0 +1,54 @@
+name: Publish McTaggart Fire OS 5 public APK from verified mirror
+on:
+  push:
+    paths:
+      - 'public-mctaggart-fireos5-art-vpn-source.txt'
+      - '.github/workflows/publish-mctaggart-fireos5-art-vpn.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download and verify exact approved APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=public-mctaggart-fireos5-art-vpn-source.txt
+          test -s "$SOURCE"
+          URL="$(sed -n '1p' "$SOURCE" | tr -d '\r')"
+          EXPECTED="$(sed -n '2p' "$SOURCE" | tr -d '\r')"
+          [[ "$URL" =~ ^https://(filebin\.net|qurl\.sh|litter\.catbox\.moe)/ ]] || {
+            echo "Unexpected mirror hostname"; exit 1;
+          }
+          [[ "$EXPECTED" =~ ^[a-f0-9]{64}$ ]] || { echo "Invalid SHA-256"; exit 1; }
+          APK=McTaggart-FireOS5-Art-VPN-v2-TEST.apk
+          curl --fail --show-error --location --retry 3 --max-time 300 \
+            -o "$APK" "$URL"
+          printf '%s  %s\n' "$EXPECTED" "$APK" | sha256sum --check
+          test "$(wc -c < "$APK")" -gt 10000000
+          unzip -t "$APK" >/dev/null
+          unzip -l "$APK" | grep -q 'assets/private/oracle-firestick.b64'
+          echo "Verified exact matching APK; original private build not modified."
+      - name: Publish public downloadable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=McTaggart-FireOS5-Art-VPN-v2-TEST.apk
+          TAG=mctaggart-fireos5-art-vpn-public-v2
+          NOTES="User-authorized public TEST APK. Includes extractable personal WireGuard VPN client configuration. Intended for the owner's old Fire OS 5 Firestick; do not share to strangers. Original stable installations unaffected."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$APK" \
+              --repo "$GITHUB_REPOSITORY" --target main --prerelease \
+              --title "McTaggart Fire OS 5 artwork and VPN v2 TEST" --notes "$NOTES"
+          fi
+          echo "PUBLIC_APK_URL=https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$APK"
+          echo "### Public direct APK link" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$APK" >> "$GITHUB_STEP_SUMMARY"
