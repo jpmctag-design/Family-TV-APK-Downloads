@@ -1,0 +1,35 @@
+name: Create short Downloader-compatible URL for McTaggart Fire OS 5
+on:
+  push:
+    paths: [ ".github/workflows/create-mctaggart-shortlink.yml" ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shorten:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create easily typed public download shortlink
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="https://github.com/jpmctag-design/Family-TV-APK-Downloads/releases/download/mctaggart-fireos5-art-vpn-public-v2/McTaggart-FireOS5-Art-VPN-v2-TEST.apk"
+          SHORT="$(curl --fail --show-error --silent --get --max-time 30 \
+            --data-urlencode "format=simple" \
+            --data-urlencode "url=$TARGET" \
+            --data-urlencode "shorturl=McTagFire5" \
+            https://is.gd/create.php || true)"
+          if [[ "$SHORT" != "https://is.gd/McTagFire5" ]]; then
+            echo "Custom alias result: $SHORT"
+            SHORT="$(curl --fail --show-error --silent --get --max-time 30 \
+              --data-urlencode "format=simple" --data-urlencode "url=$TARGET" \
+              https://is.gd/create.php)"
+          fi
+          [[ "$SHORT" =~ ^https://is.gd/[[:alnum:]]+$ ]] || { echo "Shortener did not give a URL"; exit 1; }
+          RESPONSE="$(curl -sS --location --head --max-time 35 -o /dev/null -w '%{http_code}' "$SHORT" || true)"
+          echo "Shortlink response: $RESPONSE"
+          [[ "$RESPONSE" == 200 || "$RESPONSE" == 302 || "$RESPONSE" == 301 ]] || exit 1
+          echo "SHORT_DOWNLOAD_LINK=$SHORT"
+          echo "## Short download URL for Firestick Downloader" >> "$GITHUB_STEP_SUMMARY"
+          echo "$SHORT" >> "$GITHUB_STEP_SUMMARY"
